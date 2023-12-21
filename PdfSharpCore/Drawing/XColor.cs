@@ -211,6 +211,20 @@ namespace PdfSharpCore.Drawing
             return Empty;
         }
 
+        public static XColor FromValues(double[] elements)
+        {
+            XColor color = XColor.Empty;
+
+            if (elements.Length == 1)
+                color = XColor.FromGrayScale(elements[0]);
+            else if (elements.Length == 3)
+                color = XColor.FromArgb(Convert.ToInt32(elements[0] * 255), Convert.ToInt32(elements[1] * 255), Convert.ToInt32(elements[2] * 255));
+            else if (elements.Length == 4)
+                color = XColor.FromCmyk(elements[0], elements[1], elements[2], elements[3]);
+
+            return color;
+        }
+
         /// <summary>
         /// Gets or sets the color space to be used for PDF generation.
         /// </summary>

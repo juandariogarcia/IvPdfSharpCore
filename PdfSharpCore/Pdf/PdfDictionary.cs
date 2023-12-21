@@ -40,6 +40,7 @@ using PdfSharpCore.Pdf.Filters;
 using PdfSharpCore.Pdf.Advanced;
 using PdfSharpCore.Pdf.Internal;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 
 namespace PdfSharpCore.Pdf
 {

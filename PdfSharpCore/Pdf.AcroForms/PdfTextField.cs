@@ -29,9 +29,14 @@
 
 using PdfSharpCore.Drawing;
 using PdfSharpCore.Fonts;
+using PdfSharpCore.Internal;
 using PdfSharpCore.Pdf.Advanced;
 using PdfSharpCore.Pdf.Annotations;
 using PdfSharpCore.Pdf.Internal;
+using System;
+using System.Diagnostics.Tracing;
+using System.Linq;
+using System.Reflection.Emit;
 
 namespace PdfSharpCore.Pdf.AcroForms
 {
@@ -134,124 +139,70 @@ namespace PdfSharpCore.Pdf.AcroForms
         /// Creates the normal appearance form X object for the annotation that represents
         /// this acro form text field.
         /// </summary>
-        void RenderAppearance()
+        public void RenderAppearance()
         {
-#if true_
-            PdfFormXObject xobj = new PdfFormXObject(Owner);
-            Owner.Internals.AddObject(xobj);
-            xobj.Elements["/BBox"] = new PdfLiteral("[0 0 122.653 12.707]");
-            xobj.Elements["/FormType"] = new PdfLiteral("1");
-            xobj.Elements["/Matrix"] = new PdfLiteral("[1 0 0 1 0 0]");
-            PdfDictionary res = new PdfDictionary(Owner);
-            xobj.Elements["/Resources"] = res;
-            res.Elements["/Font"] = new PdfLiteral("<< /Helv 28 0 R >> /ProcSet [/PDF /Text]");
-            xobj.Elements["/Subtype"] = new PdfLiteral("/Form");
-            xobj.Elements["/Type"] = new PdfLiteral("/XObject");
+            PdfRectangle rect = Elements.GetRectangle(PdfAnnotation.Keys.Rect);
+            var box = rect.ToXRect() - rect.Location;
+            XForm form = new XForm(Owner, rect.Size);
+            var gfx = XGraphics.FromForm(form);
 
-            string s =
-              "/Tx BMC " + '\n' +
-              "q" + '\n' +
-              "1 1 120.653 10.707 re" + '\n' +
-              "W" + '\n' +
-              "n" + '\n' +
-              "BT" + '\n' +
-              "/Helv 7.93 Tf" + '\n' +
-              "0 g" + '\n' +
-              "2 3.412 Td" + '\n' +
-              "(Hello ) Tj" + '\n' +
-              "20.256 0 Td" + '\n' +
-              "(XXX) Tj" + '\n' +
-              "ET" + '\n' +
-              "Q" + '\n' +
-              "";//"EMC";
-            int length = s.Length;
-            byte[] stream = new byte[length];
-            for (int idx = 0; idx < length; idx++)
-                stream[idx] = (byte)s[idx];
-            xobj.CreateStream(stream);
+            XColor bgcolor = XColor.Empty;
+            int bordersize = 0;
+            XColor bordercolor = XColor.Empty;
 
-            // Get existing or create new appearance dictionary
-            PdfDictionary ap = Elements[PdfAnnotation.Keys.AP] as PdfDictionary;
-            if (ap == null)
+            var style = Elements.GetDictionary("/MK");
+            if (style != null)
             {
-                ap = new PdfDictionary(_document);
-                Elements[PdfAnnotation.Keys.AP] = ap;
+                var bgdic = style.Elements.GetArray("/BG");
+                if (bgdic != null)
+                {
+                    double[] elements = bgdic.Elements.Items.Select(x => (x as PdfReal)?.Value).Where(x => x != null).Cast<double>().ToArray();
+                    bgcolor = XColor.FromValues(elements);
+                }
+
+                var borderdic = style.Elements.GetArray("/BC");
+                if (borderdic != null)
+                {
+                    double[] elements = borderdic.Elements.Items.Select(x => (x as PdfReal)?.Value).Where(x => x != null).Cast<double>().ToArray();
+                    bordercolor = XColor.FromValues(elements);
+                }
             }
 
-            // Set XRef to normal state
-            ap.Elements["/N"] = xobj.Reference;
+            var bs = Elements.GetDictionary("/BS")?.Elements?.GetInteger("/W");
+            if (bs != null)
+            {
+                bordersize = bs ?? 0;
+            }
 
+            gfx.DrawRectangle(new XSolidBrush(bgcolor), box);
 
+            if (bordersize > 0)
+            {
 
+                for (int i=0;i<=bordersize; i++)
+                {
+                    var x = i / 2;
+                    //laterales
+                    var (a, b) = (new XPoint(box.Width - i, 0), new XPoint(box.Width - i, box.Height));
+                    var (c, d) = (new XPoint(i, 0), new XPoint(i, box.Height));
 
-            //// HACK
-            //string m =
-            //"<?xpacket begin=\"﻿\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>" + '\n' +
-            //"<x:xmpmeta xmlns:x=\"adobe:ns:meta/\" x:xmptk=\"Adobe XMP Core 4.0-c321 44.398116, Tue Aug 04 2009 14:24:39\"> " + '\n' +
-            //"   <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"> " + '\n' +
-            //"      <rdf:Description rdf:about=\"\" " + '\n' +
-            //"            xmlns:pdf=\"http://ns.adobe.com/pdf/1.3/\"> " + '\n' +
-            //"         <pdf:Producer>PDFsharp 1.40.2150-g (www.PdfSharpCore.com) (Original: Powered By Crystal)</pdf:Producer> " + '\n' +
-            //"      </rdf:Description> " + '\n' +
-            //"      <rdf:Description rdf:about=\"\" " + '\n' +
-            //"            xmlns:xap=\"http://ns.adobe.com/xap/1.0/\"> " + '\n' +
-            //"         <xap:ModifyDate>2011-07-11T23:15:09+02:00</xap:ModifyDate> " + '\n' +
-            //"         <xap:CreateDate>2011-05-19T16:26:51+03:00</xap:CreateDate> " + '\n' +
-            //"         <xap:MetadataDate>2011-07-11T23:15:09+02:00</xap:MetadataDate> " + '\n' +
-            //"         <xap:CreatorTool>Crystal Reports</xap:CreatorTool> " + '\n' +
-            //"      </rdf:Description> " + '\n' +
-            //"      <rdf:Description rdf:about=\"\" " + '\n' +
-            //"            xmlns:dc=\"http://purl.org/dc/elements/1.1/\"> " + '\n' +
-            //"         <dc:format>application/pdf</dc:format> " + '\n' +
-            //"      </rdf:Description> " + '\n' +
-            //"      <rdf:Description rdf:about=\"\" " + '\n' +
-            //"            xmlns:xapMM=\"http://ns.adobe.com/xap/1.0/mm/\"> " + '\n' +
-            //"         <xapMM:DocumentID>uuid:68249d89-baed-4384-9a2d-fbf8ace75c45</xapMM:DocumentID> " + '\n' +
-            //"         <xapMM:InstanceID>uuid:3d5f2f46-c140-416f-baf2-7f9c970cef1d</xapMM:InstanceID> " + '\n' +
-            //"      </rdf:Description> " + '\n' +
-            //"   </rdf:RDF> " + '\n' +
-            //"</x:xmpmeta> " + '\n' +
-            //"                                                                          " + '\n' +
-            //"                                                                          " + '\n' +
-            //"                                                                          " + '\n' +
-            //"                                                                          " + '\n' +
-            //"                                                                          " + '\n' +
-            //"                                                                          " + '\n' +
-            //"                                                                          " + '\n' +
-            //"                                                                          " + '\n' +
-            //"                                                                          " + '\n' +
-            //"                                                                          " + '\n' +
-            //"<?xpacket end=\"w\"?>";
+                    //inferior
+                    var (e, f) = (new XPoint(0, box.Height - i), new XPoint(box.Width, box.Height - i));
 
-            //PdfDictionary mdict = (PdfDictionary)_document.Internals.GetObject(new PdfObjectID(32));
+                    //superior
+                    var (g, h) = (new XPoint(0, i), new XPoint(box.Width, i));
 
-            //length = m.Length;
-            //stream = new byte[length];
-            //for (int idx = 0; idx < length; idx++)
-            //  stream[idx] = (byte)m[idx];
+                    gfx.DrawLine(new XPen(bordercolor), a, b);
+                    gfx.DrawLine(new XPen(bordercolor), c, d);
+                    gfx.DrawLine(new XPen(bordercolor), e, f);
+                    gfx.DrawLine(new XPen(bordercolor), g, h);
+                }
 
-            //mdict.Stream.Value = stream;
-
-
-
-
-#else
-            PdfRectangle rect = Elements.GetRectangle(PdfAnnotation.Keys.Rect);
-            XForm form = new XForm(_document, rect.Size);
-            XGraphics gfx = XGraphics.FromForm(form);
-
-            if (_backColor != XColor.Empty)
-                gfx.DrawRectangle(new XSolidBrush(BackColor), rect.ToXRect() - rect.Location);
-
-            string text = Text;
-            if (text.Length > 0)
-                gfx.DrawString(Text, Font, new XSolidBrush(ForeColor),
-                  rect.ToXRect() - rect.Location + new XPoint(2, 0), XStringFormats.TopLeft);
-
+            }
+            
             form.DrawingFinished();
             form.PdfForm.Elements.Add("/FormType", new PdfLiteral("1"));
 
-            // Get existing or create new appearance dictionary.
             PdfDictionary ap = Elements[PdfAnnotation.Keys.AP] as PdfDictionary;
             if (ap == null)
             {
@@ -259,16 +210,18 @@ namespace PdfSharpCore.Pdf.AcroForms
                 Elements[PdfAnnotation.Keys.AP] = ap;
             }
 
-            // Set XRef to normal state
-            ap.Elements["/N"] = form.PdfForm.Reference;
-
             PdfFormXObject xobj = form.PdfForm;
             string s = xobj.Stream.ToString();
+
+            var (p1, p2, p3, p4) = (bordersize, bordersize, box.Width - (bordersize * 2), box.Height - (bordersize * 2));
+            var txsizestring = $"q\nn\nq\n{p1} {p2} {p3} {p4} re\nW\nn";
+
             // Thank you Adobe: Without putting the content in 'EMC brackets'
             // the text is not rendered by PDF Reader 9 or higher.
-            s = "/Tx BMC\n" + s + "\nEMC";
+            s = $"{s}\n/Tx BMC\n{txsizestring}\nEMC";
             xobj.Stream.Value = new RawEncoding().GetBytes(s);
-#endif
+
+            ap.Elements["/N"] = form.PdfForm.Reference;
         }
 
         internal override void PrepareForSave()
